@@ -1,0 +1,1312 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HermiBorð — VMA Rafdeild</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@400;600;700;900&family=Barlow+Condensed:wght@700;900&display=swap" rel="stylesheet">
+<style>
+  /* ─── TOKENS ─── */
+  :root {
+    --bg:     #0d0f14;
+    --panel:  #141720;
+    --panel2: #1e2333;
+    --border: #2e3650;
+    --cyan:   #38d9f5;
+    --green:  #4ae88a;
+    --yellow: #f9d94e;
+    --red:    #ff6b6b;
+    --text:   #e8f0f8;
+    --muted:  #8fa3be;
+    --mono:  'Share Tech Mono', monospace;
+    --sans:  'Barlow', sans-serif;
+    --cond:  'Barlow Condensed', sans-serif;
+    --r: 8px;
+    --focus: 0 0 0 3px var(--cyan);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 1rem;
+    line-height: 1.6;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content:'';
+    position:fixed; inset:0;
+    background-image:
+      linear-gradient(rgba(56,217,245,.025) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(56,217,245,.025) 1px,transparent 1px);
+    background-size:40px 40px;
+    pointer-events:none; z-index:0;
+  }
+
+  /* ─── SKIP LINK ─── */
+  .skip-link {
+    position:absolute; top:-100%; left:1rem;
+    background:var(--cyan); color:#000; font-weight:700;
+    padding:.5rem 1.2rem; border-radius:0 0 var(--r) var(--r);
+    text-decoration:none; font-size:.9rem; z-index:9999;
+    transition:top .2s;
+  }
+  .skip-link:focus { top:0; }
+  :focus-visible { outline:none; box-shadow:var(--focus); border-radius:4px; }
+
+  /* ─── HEADER ─── */
+  header {
+    position:sticky; top:0; z-index:100;
+    background:rgba(13,15,20,.96);
+    backdrop-filter:blur(12px);
+    border-bottom:1px solid var(--border);
+    padding:0 1.5rem;
+    display:flex; align-items:center; gap:1rem;
+    min-height:64px; flex-wrap:wrap;
+  }
+
+  /* VMA Logo SVG */
+  .vma-logo {
+    display:flex; align-items:center; gap:10px;
+    text-decoration:none; flex-shrink:0;
+  }
+
+  .vma-logo:focus-visible { box-shadow:var(--focus); border-radius:4px; }
+
+  .vma-emblem {
+    width:40px; height:40px; flex-shrink:0;
+  }
+
+  .vma-text-wrap {
+    display:flex; flex-direction:column; line-height:1;
+  }
+
+  .vma-name {
+    font-family:var(--cond);
+    font-weight:900;
+    font-size:.85rem;
+    color:#fff;
+    letter-spacing:.5px;
+  }
+
+  .vma-dept {
+    font-family:var(--mono);
+    font-size:.55rem;
+    color:var(--cyan);
+    letter-spacing:2px;
+    text-transform:uppercase;
+  }
+
+  .header-divider {
+    width:1px; height:32px;
+    background:var(--border);
+    flex-shrink:0;
+  }
+
+  header h1 {
+    font-family:var(--cond); font-weight:900;
+    font-size:clamp(.95rem,2.5vw,1.3rem);
+    flex:1; min-width:120px;
+  }
+  header h1 span { color:var(--cyan); }
+
+  .progress-wrap {
+    display:flex; align-items:center; gap:.6rem; white-space:nowrap;
+  }
+  .progress-label { font-family:var(--mono); font-size:.7rem; color:var(--muted); }
+  .progress-track {
+    width:clamp(70px,12vw,160px); height:8px;
+    background:var(--panel2); border-radius:4px; overflow:hidden;
+  }
+  .progress-fill {
+    height:100%;
+    background:linear-gradient(90deg,var(--cyan),var(--green));
+    border-radius:4px; transition:width .5s ease; width:0%;
+  }
+  .pct-text { font-family:var(--mono); font-size:.7rem; color:var(--cyan); min-width:34px; font-weight:700; }
+
+  /* Sync indicator */
+  .sync-dot {
+    width:8px; height:8px; border-radius:50%;
+    background:var(--border); flex-shrink:0;
+    transition:background .3s;
+    title:'Geymslustaða';
+  }
+  .sync-dot.saving  { background:var(--yellow); }
+  .sync-dot.saved   { background:var(--green); }
+  .sync-dot.error   { background:var(--red); }
+
+  /* ─── LAYOUT ─── */
+  .container {
+    max-width:1160px; margin:0 auto; padding:1.5rem;
+    position:relative; z-index:1;
+    display:grid;
+    grid-template-columns:260px 1fr;
+    gap:1.5rem; align-items:start;
+  }
+
+  @media(max-width:820px) {
+    .container { grid-template-columns:1fr; }
+  }
+
+  /* ─── SIDEBAR ─── */
+  .sidebar { position:sticky; top:80px; }
+
+  .sidebar-heading {
+    font-family:var(--mono); font-size:.6rem;
+    color:var(--muted); letter-spacing:3px;
+    text-transform:uppercase; margin-bottom:.75rem; padding-left:4px;
+  }
+
+  .step-nav { list-style:none; display:flex; flex-direction:column; gap:2px; }
+
+  @media(max-width:820px) {
+    .step-nav { flex-direction:row; overflow-x:auto; gap:4px; padding-bottom:6px; }
+    .step-nav li { flex-shrink:0; }
+    .step-num-text { display:none; }
+  }
+
+  .step-nav li button {
+    width:100%; text-align:left;
+    background:none; border:1px solid transparent;
+    cursor:pointer; padding:9px 13px; border-radius:var(--r);
+    display:flex; align-items:center; gap:10px;
+    transition:background .15s,border-color .15s;
+    color:var(--muted); font-family:var(--sans); font-size:.84rem;
+    min-height:44px;
+  }
+  .step-nav li button:hover { background:var(--panel2); color:var(--text); border-color:var(--border); }
+  .step-nav li button[aria-current="step"] {
+    background:rgba(56,217,245,.07); color:var(--cyan); border-color:rgba(56,217,245,.35);
+  }
+  .step-nav li button.done { color:var(--green); }
+
+  .step-num {
+    width:24px; height:24px; border-radius:50%;
+    background:var(--panel2); border:1px solid var(--border);
+    font-family:var(--mono); font-size:.62rem;
+    display:flex; align-items:center; justify-content:center;
+    flex-shrink:0; transition:background .2s,color .2s; color:var(--muted);
+  }
+  .step-nav li button[aria-current="step"] .step-num { background:var(--cyan); color:#000; border-color:var(--cyan); }
+  .step-nav li button.done .step-num { background:var(--green); color:#000; border-color:var(--green); }
+
+  /* ─── 3D VIEWER BUTTON & MODAL ─── */
+  .viewer-btn-wrap {
+    margin-top:1.2rem;
+  }
+
+  .btn-3d {
+    width:100%; min-height:80px;
+    background:var(--panel2);
+    border:1px dashed rgba(56,217,245,.35);
+    border-radius:var(--r);
+    cursor:pointer; color:var(--text);
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    gap:6px; padding:1rem;
+    transition:border-color .2s,background .2s;
+    font-family:var(--sans);
+  }
+  .btn-3d:hover { border-color:var(--cyan); background:rgba(56,217,245,.04); }
+  .btn-3d-icon { font-size:1.6rem; }
+  .btn-3d-label { font-family:var(--cond); font-weight:700; font-size:.95rem; letter-spacing:.5px; }
+  .btn-3d-sub { font-family:var(--mono); font-size:.6rem; color:var(--muted); letter-spacing:1px; }
+
+  /* Íhlutarlisti sidebar */
+  .comp-card {
+    margin-top:1.2rem; padding:1rem;
+    background:var(--panel); border:1px solid var(--border); border-radius:var(--r);
+  }
+  .comp-card h2 { font-family:var(--mono); font-size:.6rem; color:var(--muted); letter-spacing:3px; text-transform:uppercase; margin-bottom:.6rem; }
+
+  .comp-item {
+    display:flex; align-items:center; gap:10px;
+    padding:5px 4px; border-bottom:1px solid rgba(255,255,255,.04);
+    cursor:pointer; min-height:40px; font-size:.78rem;
+    border-radius:4px; transition:opacity .15s;
+  }
+  .comp-item:last-child { border-bottom:none; }
+  .comp-item:hover { background:rgba(255,255,255,.03); }
+  .comp-item[aria-checked="true"] { opacity:.5; text-decoration:line-through; }
+  .comp-item[aria-checked="true"] .comp-icon { color:var(--green); }
+  .comp-icon { font-size:.85rem; width:18px; text-align:center; color:var(--border); flex-shrink:0; }
+  .comp-qty { font-family:var(--mono); font-size:.62rem; color:var(--yellow); margin-left:auto; padding:1px 6px; background:rgba(249,217,78,.1); border:1px solid rgba(249,217,78,.25); border-radius:3px; }
+
+  @media(max-width:820px) { .comp-card { display:none; } }
+
+  /* ─── 3D MODAL ─── */
+  .modal-overlay {
+    position:fixed; inset:0; z-index:200;
+    background:rgba(0,0,0,.85);
+    backdrop-filter:blur(8px);
+    display:none;
+    align-items:center; justify-content:center;
+    padding:1rem;
+  }
+  .modal-overlay.open { display:flex; }
+
+  .modal {
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:12px;
+    width:100%; max-width:900px;
+    max-height:90vh;
+    display:flex; flex-direction:column;
+    overflow:hidden;
+    animation:fadeUp .25s ease;
+  }
+
+  @keyframes fadeUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+
+  .modal-header {
+    display:flex; align-items:center; gap:1rem;
+    padding:1rem 1.5rem;
+    border-bottom:1px solid var(--border);
+    background:var(--panel2);
+  }
+  .modal-header h2 { font-family:var(--cond); font-weight:900; font-size:1.3rem; flex:1; }
+  .modal-badge { font-family:var(--mono); font-size:.58rem; color:var(--cyan); background:rgba(56,217,245,.1); border:1px solid rgba(56,217,245,.25); border-radius:3px; padding:2px 8px; letter-spacing:2px; text-transform:uppercase; }
+
+  .modal-close {
+    background:none; border:none; color:var(--muted); cursor:pointer;
+    font-size:1.4rem; padding:4px 8px; border-radius:4px;
+    transition:color .15s; min-height:44px; min-width:44px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .modal-close:hover { color:var(--red); }
+
+  /* Canvas container */
+  .viewer-wrap {
+    position:relative; flex:1; min-height:400px;
+    background:#0a1008;
+  }
+
+  #pcb-canvas {
+    display:block; width:100%; height:100%;
+  }
+
+  .viewer-controls {
+    position:absolute; bottom:1rem; left:50%; transform:translateX(-50%);
+    display:flex; gap:.5rem;
+    background:rgba(0,0,0,.6); backdrop-filter:blur(6px);
+    border:1px solid var(--border); border-radius:99px;
+    padding:.4rem .8rem;
+  }
+
+  .ctrl-btn {
+    background:none; border:none; cursor:pointer;
+    color:var(--muted); font-family:var(--mono); font-size:.65rem;
+    padding:4px 10px; border-radius:99px; transition:all .15s;
+    display:flex; align-items:center; gap:5px;
+    min-height:36px;
+    letter-spacing:1px;
+  }
+  .ctrl-btn:hover { background:rgba(56,217,245,.1); color:var(--cyan); }
+
+  .viewer-hint {
+    position:absolute; top:1rem; right:1rem;
+    background:rgba(0,0,0,.5); border:1px solid var(--border);
+    border-radius:6px; padding:.5rem .75rem;
+    font-family:var(--mono); font-size:.58rem;
+    color:var(--muted); line-height:1.7;
+    pointer-events:none;
+  }
+
+  /* Legend */
+  .viewer-legend {
+    padding:1rem 1.5rem;
+    border-top:1px solid var(--border);
+    display:flex; gap:1.5rem; flex-wrap:wrap;
+    font-family:var(--mono); font-size:.62rem; color:var(--muted);
+  }
+  .legend-item { display:flex; align-items:center; gap:6px; }
+  .legend-dot { width:10px; height:10px; border-radius:2px; flex-shrink:0; }
+  .placeholder-note {
+    font-family:var(--mono); font-size:.6rem;
+    color:var(--yellow); letter-spacing:1px;
+    padding:.5rem 1.5rem;
+    border-top:1px solid var(--border);
+    background:rgba(249,217,78,.04);
+    display:flex; align-items:center; gap:8px;
+  }
+
+  /* ─── MAIN CONTENT ─── */
+  main { display:flex; flex-direction:column; gap:1.5rem; }
+
+  .step-card { display:none; background:var(--panel); border:1px solid var(--border); border-radius:12px; overflow:hidden; animation:fadeUp .3s ease; }
+  .step-card.active { display:block; }
+
+  .card-header { display:flex; align-items:center; gap:1rem; padding:1.25rem 1.75rem; border-bottom:1px solid var(--border); background:var(--panel2); }
+  .card-step-badge { font-family:var(--mono); font-size:.6rem; color:var(--cyan); letter-spacing:2px; }
+  .card-title { font-family:var(--cond); font-weight:900; font-size:clamp(1.1rem,3vw,1.5rem); flex:1; }
+  .card-icon { font-size:1.8rem; opacity:.75; }
+  .card-body { padding:1.5rem 1.75rem; }
+
+  .info-box { border-left:4px solid var(--cyan); background:rgba(56,217,245,.05); border-radius:0 var(--r) var(--r) 0; padding:.9rem 1.1rem; margin-bottom:1.25rem; font-size:.9rem; line-height:1.65; }
+  .info-box.warn   { border-left-color:var(--yellow); background:rgba(249,217,78,.05); }
+  .info-box.danger { border-left-color:var(--red);    background:rgba(255,107,107,.05); }
+  .info-box.ok     { border-left-color:var(--green);  background:rgba(74,232,138,.05); }
+  .box-label { font-family:var(--mono); font-size:.58rem; letter-spacing:3px; text-transform:uppercase; opacity:.7; margin-bottom:.35rem; }
+
+  .sec-h { font-family:var(--mono); font-size:.6rem; color:var(--muted); letter-spacing:3px; text-transform:uppercase; margin:1.25rem 0 .65rem; }
+  .sec-h:first-child { margin-top:0; }
+
+  .checklist { list-style:none; display:flex; flex-direction:column; gap:6px; margin-bottom:1.25rem; }
+  .checklist li { display:flex; align-items:flex-start; gap:12px; padding:11px 13px; background:rgba(255,255,255,.02); border:1px solid var(--border); border-radius:var(--r); cursor:pointer; min-height:44px; font-size:.88rem; line-height:1.55; transition:background .15s,border-color .15s; }
+  .checklist li:hover { background:rgba(56,217,245,.04); border-color:rgba(56,217,245,.25); }
+  .checklist li[aria-checked="true"] { opacity:.55; border-color:rgba(74,232,138,.2); background:rgba(74,232,138,.03); }
+  .cb-box { width:22px; height:22px; border:2px solid var(--border); border-radius:4px; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:all .15s; margin-top:1px; font-size:.8rem; color:transparent; }
+  .checklist li[aria-checked="true"] .cb-box { background:var(--green); border-color:var(--green); color:#000; }
+
+  .steps-list { list-style:none; counter-reset:steps; display:flex; flex-direction:column; gap:8px; margin-bottom:1.25rem; }
+  .steps-list li { counter-increment:steps; display:flex; gap:1rem; align-items:flex-start; padding:12px 14px; background:rgba(255,255,255,.02); border:1px solid var(--border); border-radius:var(--r); font-size:.88rem; line-height:1.55; cursor:pointer; min-height:44px; transition:background .15s; }
+  .steps-list li:hover { background:rgba(56,217,245,.04); border-color:rgba(56,217,245,.2); }
+  .steps-list li[aria-checked="true"] { opacity:.5; }
+  .steps-list li::before { content:counter(steps); width:26px; height:26px; border-radius:50%; background:var(--panel2); border:1px solid var(--border); font-family:var(--mono); font-size:.65rem; color:var(--cyan); display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:1px; }
+  .steps-list li[aria-checked="true"]::before { content:'✓'; background:var(--green); color:#000; border-color:var(--green); }
+
+  .comp-table { width:100%; border-collapse:collapse; font-size:.85rem; margin-bottom:1.25rem; }
+  .comp-table caption { font-family:var(--mono); font-size:.6rem; color:var(--muted); letter-spacing:2px; text-transform:uppercase; text-align:left; padding-bottom:8px; }
+  .comp-table th { font-family:var(--mono); font-size:.62rem; letter-spacing:2px; text-transform:uppercase; color:var(--muted); text-align:left; padding:8px 12px; border-bottom:2px solid var(--border); }
+  .comp-table td { padding:10px 12px; border-bottom:1px solid rgba(255,255,255,.04); vertical-align:top; }
+  .comp-table tr:hover td { background:rgba(255,255,255,.02); }
+  .qty-badge { display:inline-block; background:rgba(249,217,78,.12); color:var(--yellow); border:1px solid rgba(249,217,78,.3); border-radius:4px; font-family:var(--mono); font-size:.68rem; padding:2px 8px; font-weight:700; }
+
+  .loda-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(185px,1fr)); gap:8px; margin-bottom:1.25rem; }
+  .loda-btn { background:rgba(255,255,255,.02); border:1px solid var(--border); border-radius:var(--r); padding:11px 13px; cursor:pointer; transition:all .15s; display:flex; align-items:center; gap:10px; text-align:left; color:var(--text); min-height:56px; font-family:var(--sans); }
+  .loda-btn:hover { border-color:rgba(56,217,245,.3); background:rgba(56,217,245,.03); }
+  .loda-btn[aria-pressed="true"] { background:rgba(74,232,138,.05); border-color:rgba(74,232,138,.3); }
+  .loda-n { width:28px; height:28px; border-radius:50%; background:var(--panel2); border:1px solid var(--border); font-family:var(--mono); font-size:.62rem; color:var(--cyan); display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:all .15s; }
+  .loda-btn[aria-pressed="true"] .loda-n { background:var(--green); color:#000; border-color:var(--green); }
+  .loda-info { flex:1; }
+  .loda-name { font-size:.82rem; font-weight:600; }
+  .loda-qty  { font-family:var(--mono); font-size:.62rem; color:var(--muted); margin-top:2px; }
+
+  .tip { display:flex; gap:.75rem; padding:.9rem 1rem; background:rgba(249,217,78,.04); border:1px dashed rgba(249,217,78,.28); border-radius:var(--r); font-size:.85rem; line-height:1.55; margin-bottom:1rem; }
+  .tip-icon { font-size:1rem; flex-shrink:0; }
+
+  .test-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:8px; margin-bottom:1.25rem; }
+  .test-btn { background:rgba(255,255,255,.02); border:1px solid var(--border); border-radius:var(--r); padding:13px 14px; cursor:pointer; transition:all .2s; display:flex; align-items:center; gap:12px; text-align:left; color:var(--text); min-height:52px; font-family:var(--sans); font-size:.86rem; }
+  .test-btn:hover { border-color:rgba(56,217,245,.3); }
+  .test-btn[data-state="pass"] { background:rgba(74,232,138,.06); border-color:rgba(74,232,138,.35); }
+  .test-btn[data-state="fail"] { background:rgba(255,107,107,.06); border-color:rgba(255,107,107,.35); }
+  .test-indicator { width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:.9rem; flex-shrink:0; background:var(--panel2); border:2px solid var(--border); color:transparent; transition:all .2s; }
+  .test-btn[data-state="pass"] .test-indicator { background:var(--green); border-color:var(--green); color:#000; box-shadow:0 0 8px rgba(74,232,138,.4); }
+  .test-btn[data-state="fail"] .test-indicator { background:var(--red); border-color:var(--red); color:#fff; box-shadow:0 0 8px rgba(255,107,107,.4); }
+  .test-inner { flex:1; }
+  .test-name { font-size:.86rem; }
+  .test-status { font-family:var(--mono); font-size:.6rem; margin-top:1px; color:var(--muted); }
+  .test-btn[data-state="pass"] .test-status { color:var(--green); }
+  .test-btn[data-state="fail"] .test-status { color:var(--red); }
+
+  .nav-row { display:flex; gap:1rem; margin-top:1.75rem; padding-top:1.25rem; border-top:1px solid var(--border); flex-wrap:wrap; }
+  .spacer { flex:1; }
+
+  .btn { padding:.6rem 1.4rem; border-radius:var(--r); border:1px solid transparent; cursor:pointer; font-family:var(--cond); font-weight:700; font-size:1rem; letter-spacing:.5px; transition:all .15s; display:inline-flex; align-items:center; gap:6px; min-height:44px; text-decoration:none; }
+  .btn-ghost { background:transparent; border-color:var(--border); color:var(--muted); }
+  .btn-ghost:hover { border-color:var(--cyan); color:var(--cyan); }
+  .btn-primary { background:var(--cyan); color:#000; border-color:var(--cyan); }
+  .btn-primary:hover { background:#55e5ff; transform:translateY(-1px); }
+  .btn-complete { background:var(--green); color:#000; border-color:var(--green); }
+  .btn-complete:hover { background:#6ff59e; transform:translateY(-1px); }
+  .btn:disabled { opacity:.35; cursor:not-allowed; transform:none !important; }
+
+  strong { color:#fff; font-weight:700; }
+  code { font-family:var(--mono); background:rgba(56,217,245,.09); border:1px solid rgba(56,217,245,.18); border-radius:3px; padding:1px 6px; font-size:.82em; color:var(--cyan); }
+
+  /* ─── COMPLETION ─── */
+  .complete-wrap { text-align:center; padding:2.5rem 1.5rem 3rem; }
+  .complete-icon { font-size:3.5rem; margin-bottom:.75rem; display:block; }
+  .complete-wrap h2 { font-family:var(--cond); font-weight:900; font-size:clamp(1.8rem,5vw,2.5rem); color:var(--green); margin-bottom:.5rem; }
+  .complete-wrap p { color:var(--muted); font-size:.95rem; max-width:440px; margin:0 auto 2rem; }
+  .stats-row { display:flex; gap:1rem; justify-content:center; flex-wrap:wrap; margin-bottom:2rem; }
+  .stat-card { background:var(--panel2); border:1px solid var(--border); border-radius:var(--r); padding:1rem 1.5rem; text-align:center; min-width:100px; }
+  .stat-label { font-family:var(--mono); font-size:.58rem; color:var(--muted); letter-spacing:2px; text-transform:uppercase; margin-bottom:4px; }
+  .stat-val { font-family:var(--cond); font-size:2rem; font-weight:900; color:var(--cyan); }
+  .stat-card:nth-child(2) .stat-val { color:var(--green); }
+  .stat-card:nth-child(3) .stat-val { color:var(--yellow); }
+  .stat-sub { font-size:.72rem; color:var(--muted); margin-top:2px; }
+
+  @media(prefers-reduced-motion:reduce) {
+    *,*::before,*::after { animation-duration:.001ms !important; transition-duration:.001ms !important; }
+  }
+</style>
+</head>
+<body>
+
+<!-- SKIP LINK -->
+<a class="skip-link" href="#main-content">Fara beint í efni</a>
+
+<!-- HEADER -->
+<header role="banner">
+  <!-- VMA Logo -->
+  <a class="vma-logo" href="https://vma.is" target="_blank" rel="noopener" aria-label="Verkmenntaskólinn á Akureyri — opnast í nýjum flipa">
+    <!-- SVG emblem — stylized VMA shield -->
+    <svg class="vma-emblem" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M20 2 L36 8 L36 22 C36 31 28 37 20 38 C12 37 4 31 4 22 L4 8 Z" fill="#1a2a4a" stroke="#2d5fa6" stroke-width="1.5"/>
+      <path d="M20 2 L36 8 L36 22 C36 31 28 37 20 38 C12 37 4 31 4 22 L4 8 Z" fill="url(#shieldGrad)"/>
+      <!-- V shape -->
+      <path d="M10 13 L17 26 L20 20 L23 26 L30 13" stroke="#38d9f5" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      <!-- Small dot -->
+      <circle cx="20" cy="31" r="1.5" fill="#38d9f5" opacity=".6"/>
+      <defs>
+        <linearGradient id="shieldGrad" x1="20" y1="2" x2="20" y2="38" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#1e3a6e" stop-opacity=".9"/>
+          <stop offset="100%" stop-color="#0d1f40" stop-opacity=".9"/>
+        </linearGradient>
+      </defs>
+    </svg>
+    <div class="vma-text-wrap">
+      <span class="vma-name">Verkmenntaskólinn á Akureyri</span>
+      <span class="vma-dept">Rafdeild · VMA</span>
+    </div>
+  </a>
+
+  <div class="header-divider" aria-hidden="true"></div>
+
+  <h1>Hermi<span>Borð</span></h1>
+
+  <div class="progress-wrap" role="status" aria-live="polite" aria-label="Framgangur verkefnis">
+    <span class="progress-label">Framgangur</span>
+    <div class="progress-track" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" id="progressBar">
+      <div class="progress-fill" id="progressFill"></div>
+    </div>
+    <span class="pct-text" id="pctText" aria-hidden="true">0%</span>
+    <div class="sync-dot" id="syncDot" title="Geymslustaða" aria-hidden="true"></div>
+  </div>
+</header>
+
+<!-- 3D MODAL -->
+<div class="modal-overlay" id="viewerModal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <h2 id="modal-title">HermiBorð — 3D Skoðari</h2>
+      </div>
+      <span class="modal-badge" aria-label="Forskoðun">PLACEHOLDER</span>
+      <button class="modal-close" onclick="closeViewer()" aria-label="Loka 3D skoðara">✕</button>
+    </div>
+
+    <div class="viewer-wrap">
+      <canvas id="pcb-canvas" aria-label="Þrívíð mynd af HermiBorðinu. Notaðu mús til að snúa, skrúfu til að þysja."></canvas>
+      <div class="viewer-hint" aria-hidden="true">
+        🖱 Draga til að snúa<br>
+        ⚙ Skrúfa til að þysja<br>
+        🖱 Hægri draga til að færa
+      </div>
+      <div class="viewer-controls" role="toolbar" aria-label="3D stjórntæki">
+        <button class="ctrl-btn" onclick="resetCamera()" aria-label="Endurstilla sjónarhorn">↺ Endurstilla</button>
+        <button class="ctrl-btn" onclick="viewTop()" aria-label="Skoða ofan frá">⬆ Ofan</button>
+        <button class="ctrl-btn" onclick="viewFront()" aria-label="Skoða að framan">⬛ Framan</button>
+        <button class="ctrl-btn" onclick="viewSide()" aria-label="Skoða hlið">◧ Hlið</button>
+      </div>
+    </div>
+
+    <div class="placeholder-note" role="note">
+      <span aria-hidden="true">⚠</span>
+      Þetta er tölvugert líkan sem sýnir útlit borðsins — raunverulegt GLB módel kemur þegar tæknileg gögn eru tilbúin.
+    </div>
+
+    <div class="viewer-legend" role="list" aria-label="Litaforskrift">
+      <div class="legend-item" role="listitem"><div class="legend-dot" style="background:#2d7a3a" aria-hidden="true"></div> PCB plata</div>
+      <div class="legend-item" role="listitem"><div class="legend-dot" style="background:#222" aria-hidden="true"></div> Relay</div>
+      <div class="legend-item" role="listitem"><div class="legend-dot" style="background:#555" aria-hidden="true"></div> IDC tengi</div>
+      <div class="legend-item" role="listitem"><div class="legend-dot" style="background:#1a6" aria-hidden="true"></div> LED díóður</div>
+      <div class="legend-item" role="listitem"><div class="legend-dot" style="background:#3a5fa0" aria-hidden="true"></div> MSTB tengi</div>
+      <div class="legend-item" role="listitem"><div class="legend-dot" style="background:#888" aria-hidden="true"></div> Rofar</div>
+      <div class="legend-item" role="listitem"><div class="legend-dot" style="background:#c8a040" aria-hidden="true"></div> Viðnám</div>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN LAYOUT -->
+<div class="container">
+
+  <!-- SIDEBAR -->
+  <aside aria-label="Leiðsögn">
+    <p class="sidebar-heading" id="nav-heading">Skref verkefnisins</p>
+    <nav aria-labelledby="nav-heading">
+      <ul class="step-nav" id="stepNav">
+        <li><button aria-current="step" onclick="goTo(0)" id="nav-0"><span class="step-num" aria-hidden="true">1</span><span class="step-num-text">Undirbúningur</span></button></li>
+        <li><button onclick="goTo(1)" id="nav-1"><span class="step-num" aria-hidden="true">2</span><span class="step-num-text">Raða íhlutum</span></button></li>
+        <li><button onclick="goTo(2)" id="nav-2"><span class="step-num" aria-hidden="true">3</span><span class="step-num-text">Lóðun</span></button></li>
+        <li><button onclick="goTo(3)" id="nav-3"><span class="step-num" aria-hidden="true">4</span><span class="step-num-text">Skoðun</span></button></li>
+        <li><button onclick="goTo(4)" id="nav-4"><span class="step-num" aria-hidden="true">5</span><span class="step-num-text">Prófun</span></button></li>
+        <li><button onclick="goTo(5)" id="nav-5"><span class="step-num" aria-hidden="true">6</span><span class="step-num-text">FabLab — Plata</span></button></li>
+        <li><button onclick="goTo(6)" id="nav-6"><span class="step-num" aria-hidden="true">7</span><span class="step-num-text">FabLab — 3D Fætur</span></button></li>
+      </ul>
+    </nav>
+
+    <!-- 3D Viewer button -->
+    <div class="viewer-btn-wrap">
+      <button class="btn-3d" onclick="openViewer()" aria-haspopup="dialog" aria-label="Opna þrívíðan skoðara á HermiBorðinu">
+        <span class="btn-3d-icon" aria-hidden="true">🔲</span>
+        <span class="btn-3d-label">Skoða 3D líkan</span>
+        <span class="btn-3d-sub">SNÚA · ÞYSJA · KANNA</span>
+      </button>
+    </div>
+
+    <!-- Component checklist -->
+    <div class="comp-card">
+      <h2 id="comp-list-heading">Íhlutarlisti</h2>
+      <div role="list" aria-labelledby="comp-list-heading" id="compList">
+        <div class="comp-item" role="checkbox" aria-checked="false" tabindex="0" data-comp="0" onclick="toggleComp(this)" onkeydown="if(event.key===' '||event.key==='Enter'){toggleComp(this);event.preventDefault()}">
+          <span class="comp-icon" aria-hidden="true">☐</span>IDC tengi 40 pinnar<span class="comp-qty">×1</span>
+        </div>
+        <div class="comp-item" role="checkbox" aria-checked="false" tabindex="0" data-comp="1" onclick="toggleComp(this)" onkeydown="if(event.key===' '||event.key==='Enter'){toggleComp(this);event.preventDefault()}">
+          <span class="comp-icon" aria-hidden="true">☐</span>MSTB 2×8 pinnar<span class="comp-qty">×1</span>
+        </div>
+        <div class="comp-item" role="checkbox" aria-checked="false" tabindex="0" data-comp="2" onclick="toggleComp(this)" onkeydown="if(event.key===' '||event.key==='Enter'){toggleComp(this);event.preventDefault()}">
+          <span class="comp-icon" aria-hidden="true">☐</span>MSTB 1×2 pinnar<span class="comp-qty">×1</span>
+        </div>
+        <div class="comp-item" role="checkbox" aria-checked="false" tabindex="0" data-comp="3" onclick="toggleComp(this)" onkeydown="if(event.key===' '||event.key==='Enter'){toggleComp(this);event.preventDefault()}">
+          <span class="comp-icon" aria-hidden="true">☐</span>LED díóður<span class="comp-qty">×12</span>
+        </div>
+        <div class="comp-item" role="checkbox" aria-checked="false" tabindex="0" data-comp="4" onclick="toggleComp(this)" onkeydown="if(event.key===' '||event.key==='Enter'){toggleComp(this);event.preventDefault()}">
+          <span class="comp-icon" aria-hidden="true">☐</span>Díóður (almenn)<span class="comp-qty">×4</span>
+        </div>
+        <div class="comp-item" role="checkbox" aria-checked="false" tabindex="0" data-comp="5" onclick="toggleComp(this)" onkeydown="if(event.key===' '||event.key==='Enter'){toggleComp(this);event.preventDefault()}">
+          <span class="comp-icon" aria-hidden="true">☐</span>Díóður (stefnu)<span class="comp-qty">×8</span>
+        </div>
+        <div class="comp-item" role="checkbox" aria-checked="false" tabindex="0" data-comp="6" onclick="toggleComp(this)" onkeydown="if(event.key===' '||event.key==='Enter'){toggleComp(this);event.preventDefault()}">
+          <span class="comp-icon" aria-hidden="true">☐</span>Relay<span class="comp-qty">×4</span>
+        </div>
+        <div class="comp-item" role="checkbox" aria-checked="false" tabindex="0" data-comp="7" onclick="toggleComp(this)" onkeydown="if(event.key===' '||event.key==='Enter'){toggleComp(this);event.preventDefault()}">
+          <span class="comp-icon" aria-hidden="true">☐</span>Rofar<span class="comp-qty">×8</span>
+        </div>
+        <div class="comp-item" role="checkbox" aria-checked="false" tabindex="0" data-comp="8" onclick="toggleComp(this)" onkeydown="if(event.key===' '||event.key==='Enter'){toggleComp(this);event.preventDefault()}">
+          <span class="comp-icon" aria-hidden="true">☐</span>Viðnám<span class="comp-qty">×12</span>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main id="main-content" aria-label="Skref leiðbeiningar">
+
+    <!-- ══ SKREF 1 ══ -->
+    <section class="step-card active" id="step-0" aria-labelledby="h-0">
+      <div class="card-header">
+        <div><p class="card-step-badge">SKREF 01 AF 07</p><h2 class="card-title" id="h-0">Undirbúningur &amp; Íhlutaskoðun</h2></div>
+        <span class="card-icon" role="img" aria-label="Pakki">📦</span>
+      </div>
+      <div class="card-body">
+        <div class="info-box" role="note">
+          <p class="box-label">Um verkefnið</p>
+          HermiBorðið er hermibúnaður sem tengist PLC í gegnum IDC snúru. Nemendur lóða allt sjálfir — þetta er æfingin! Borðið þarf að vera rétt lóðað og prófað áður en það fer í kassa.
+        </div>
+        <p class="sec-h" id="prep-h">Gáttarlisti — undirbúningur</p>
+        <ul class="checklist" aria-labelledby="prep-h">
+          <li role="checkbox" aria-checked="false" tabindex="0" data-cid="prep-0" onclick="toggleCheck(this)" onkeydown="checkKey(event,this)"><span class="cb-box" aria-hidden="true">✓</span>Fenginn prentplatuinn — athugaðu engar sprungur eða skemmdir</li>
+          <li role="checkbox" aria-checked="false" tabindex="0" data-cid="prep-1" onclick="toggleCheck(this)" onkeydown="checkKey(event,this)"><span class="cb-box" aria-hidden="true">✓</span>Tæki til staðar: Lóðarjárn (350–380°C), lóðningstrengur, flux, klippur, pinsett</li>
+          <li role="checkbox" aria-checked="false" tabindex="0" data-cid="prep-2" onclick="toggleCheck(this)" onkeydown="checkKey(event,this)"><span class="cb-box" aria-hidden="true">✓</span>Góð lýsing á vinnusvæðinu</li>
+          <li role="checkbox" aria-checked="false" tabindex="0" data-cid="prep-3" onclick="toggleCheck(this)" onkeydown="checkKey(event,this)"><span class="cb-box" aria-hidden="true">✓</span>Íhlutapoki til staðar — teldu og berðu saman við töflu</li>
+        </ul>
+        <p class="sec-h">Íhlutir í pakkanum</p>
+        <table class="comp-table">
+          <caption>Listi yfir alla íhluti í HermiBorðinu</caption>
+          <thead><tr><th scope="col">Íhlutur</th><th scope="col">Fjöldi</th><th scope="col">Athugasemdir</th></tr></thead>
+          <tbody>
+            <tr><td>IDC tengi — 40 pinnar</td><td><span class="qty-badge">×1</span></td><td>J1 á prentplötunni</td></tr>
+            <tr><td>MSTB tengi — 2×8 pinnar</td><td><span class="qty-badge">×1</span></td><td>Skrúfutengi, J2</td></tr>
+            <tr><td>MSTB tengi — 1×2 pinnar</td><td><span class="qty-badge">×1</span></td><td>Orkuílag, J3</td></tr>
+            <tr><td>LED díóður</td><td><span class="qty-badge">×12</span></td><td>Lengri leggur = + (anóða)</td></tr>
+            <tr><td>Díóður (almenn)</td><td><span class="qty-badge">×4</span></td><td>Hvítur bendill = katóða (–)</td></tr>
+            <tr><td>Díóður (stefnu)</td><td><span class="qty-badge">×8</span></td><td>Flyback-vernd yfir relay spólum</td></tr>
+            <tr><td>Relay</td><td><span class="qty-badge">×4</span></td><td>K1–K4, athugaðu spennugildi</td></tr>
+            <tr><td>Rofar (On/Off + Push)</td><td><span class="qty-badge">×8</span></td><td>Munurinn er líffræðilegur</td></tr>
+            <tr><td>Viðnám</td><td><span class="qty-badge">×12</span></td><td>LED-viðnám, les litarstripa</td></tr>
+          </tbody>
+        </table>
+        <div class="nav-row"><div class="spacer"></div><button class="btn btn-primary" onclick="next()">Áfram <span aria-hidden="true">→</span></button></div>
+      </div>
+    </section>
+
+    <!-- ══ SKREF 2 ══ -->
+    <section class="step-card" id="step-1" aria-labelledby="h-1">
+      <div class="card-header">
+        <div><p class="card-step-badge">SKREF 02 AF 07</p><h2 class="card-title" id="h-1">Raða íhlutum á prentplötuna</h2></div>
+        <span class="card-icon" role="img" aria-label="Tæki">🔧</span>
+      </div>
+      <div class="card-body">
+        <div class="info-box warn" role="alert"><p class="box-label">⚠ Mikilvægt!</p><strong>Lóðaðu í réttri röð!</strong> Byrjaðu á lágum íhlutum og vinndu þig upp á við.</div>
+        <p class="sec-h" id="loda-h">Lóðunarröð</p>
+        <div class="loda-grid" role="list" aria-labelledby="loda-h">
+          <button class="loda-btn" role="checkbox" aria-pressed="false" data-loda="0" onclick="toggleLoda(this)"><span class="loda-n" aria-hidden="true">1</span><span class="loda-info"><span class="loda-name">Viðnám</span><span class="loda-qty">×12 stk</span></span></button>
+          <button class="loda-btn" role="checkbox" aria-pressed="false" data-loda="1" onclick="toggleLoda(this)"><span class="loda-n" aria-hidden="true">2</span><span class="loda-info"><span class="loda-name">Díóður (almenn)</span><span class="loda-qty">×4 — stefna!</span></span></button>
+          <button class="loda-btn" role="checkbox" aria-pressed="false" data-loda="2" onclick="toggleLoda(this)"><span class="loda-n" aria-hidden="true">3</span><span class="loda-info"><span class="loda-name">Flyback díóður</span><span class="loda-qty">×8 — stefna!</span></span></button>
+          <button class="loda-btn" role="checkbox" aria-pressed="false" data-loda="3" onclick="toggleLoda(this)"><span class="loda-n" aria-hidden="true">4</span><span class="loda-info"><span class="loda-name">LED díóður</span><span class="loda-qty">×12 — stefna!</span></span></button>
+          <button class="loda-btn" role="checkbox" aria-pressed="false" data-loda="4" onclick="toggleLoda(this)"><span class="loda-n" aria-hidden="true">5</span><span class="loda-info"><span class="loda-name">Relay</span><span class="loda-qty">×4 — K1–K4</span></span></button>
+          <button class="loda-btn" role="checkbox" aria-pressed="false" data-loda="5" onclick="toggleLoda(this)"><span class="loda-n" aria-hidden="true">6</span><span class="loda-info"><span class="loda-name">Rofar</span><span class="loda-qty">×8 stk</span></span></button>
+          <button class="loda-btn" role="checkbox" aria-pressed="false" data-loda="6" onclick="toggleLoda(this)"><span class="loda-n" aria-hidden="true">7</span><span class="loda-info"><span class="loda-name">MSTB tengi</span><span class="loda-qty">J2 og J3</span></span></button>
+          <button class="loda-btn" role="checkbox" aria-pressed="false" data-loda="7" onclick="toggleLoda(this)"><span class="loda-n" aria-hidden="true">8</span><span class="loda-info"><span class="loda-name">IDC tengi</span><span class="loda-qty">J1 — 40 pinnar, síðast!</span></span></button>
+        </div>
+        <div class="info-box" role="note"><p class="box-label">Stefna díóðna og LED</p><strong>Katóða (–):</strong> Hvítur bendill á líkama díóðunnar.<br><strong>LED anóða (+):</strong> <em>Lengri leggur</em> = plús.</div>
+        <div class="nav-row"><button class="btn btn-ghost" onclick="prev()"><span aria-hidden="true">←</span> Til baka</button><div class="spacer"></div><button class="btn btn-primary" onclick="next()">Lóðun <span aria-hidden="true">→</span></button></div>
+      </div>
+    </section>
+
+    <!-- ══ SKREF 3 ══ -->
+    <section class="step-card" id="step-2" aria-labelledby="h-2">
+      <div class="card-header">
+        <div><p class="card-step-badge">SKREF 03 AF 07</p><h2 class="card-title" id="h-2">Lóðun</h2></div>
+        <span class="card-icon" role="img" aria-label="Eld">🔥</span>
+      </div>
+      <div class="card-body">
+        <div class="info-box danger" role="alert"><p class="box-label">🚨 Öryggi</p>Lóðarjárnið er <strong>350–380°C</strong>. Snerttu aldrei odda beint. Haltu lóðningunum stuttum — undir 3 sek.</div>
+        <p class="sec-h" id="q-h">Gæðalóðning</p>
+        <ul class="checklist" aria-labelledby="q-h">
+          <li role="checkbox" aria-checked="false" tabindex="0" data-cid="q-0" onclick="toggleCheck(this)" onkeydown="checkKey(event,this)"><span class="cb-box" aria-hidden="true">✓</span><strong>Gljáandi og sléttar</strong> — kúpt og hornlaga (eins og lítið fjall)</li>
+          <li role="checkbox" aria-checked="false" tabindex="0" data-cid="q-1" onclick="toggleCheck(this)" onkeydown="checkKey(event,this)"><span class="cb-box" aria-hidden="true">✓</span><strong>Engar kaldlóðningar</strong> — gráar og skrukkaðar</li>
+          <li role="checkbox" aria-checked="false" tabindex="0" data-cid="q-2" onclick="toggleCheck(this)" onkeydown="checkKey(event,this)"><span class="cb-box" aria-hidden="true">✓</span><strong>Engar brýr</strong> — milli pinna sem ekki á að vera tengdir</li>
+          <li role="checkbox" aria-checked="false" tabindex="0" data-cid="q-3" onclick="toggleCheck(this)" onkeydown="checkKey(event,this)"><span class="cb-box" aria-hidden="true">✓</span><strong>Leggur klipptur</strong> — eftir lóðningu</li>
+        </ul>
+        <p class="sec-h" id="tech-h">Tækni — skref í röð</p>
+        <ol class="steps-list" aria-labelledby="tech-h">
+          <li role="checkbox" aria-checked="false" tabindex="0" data-cid="t-0" onclick="toggleDone(this)" onkeydown="checkKey(event,this)">Settu íhlut í sæti og beygðu leggi örlítið</li>
+          <li role="checkbox" aria-checked="false" tabindex="0" data-cid="t-1" onclick="toggleDone(this)" onkeydown="checkKey(event,this)">Hitaðu <em>bæði</em> pinna og kopar pad í 2–3 sek</li>
+          <li role="checkbox" aria-checked="false" tabindex="0" data-cid="t-2" onclick="toggleDone(this)" onkeydown="checkKey(event,this)">Settu lóðning í snertipunkt — ekki á járnið</li>
+          <li role="checkbox" aria-checked="false" tabindex="0" data-cid="t-3" onclick="toggleDone(this)" onkeydown="checkKey(event,this)">Fjarlægðu lóðningu fyrst, síðan járnið — kæla 5 sek</li>
+          <li role="checkbox" aria-checked="false" tabindex="0" data-cid="t-4" onclick="toggleDone(this)" onkeydown="checkKey(event,this)">Skoðaðu með stækkunargleri</li>
+          <li role="checkbox" aria-checked="false" tabindex="0" data-cid="t-5" onclick="toggleDone(this)" onkeydown="checkKey(event,this)">Klipptu leggi af — haltu klippunni yfir leginum</li>
+        </ol>
+        <div class="tip" role="note"><span class="tip-icon" aria-hidden="true">💡</span><span>Notaðu <strong>flux</strong> ef lóðningin rennur ekki vel.</span></div>
+        <div class="nav-row"><button class="btn btn-ghost" onclick="prev()"><span aria-hidden="true">←</span> Til baka</button><div class="spacer"></div><button class="btn btn-primary" onclick="next()">Skoðun <span aria-hidden="true">→</span></button></div>
+      </div>
+    </section>
+
+    <!-- ══ SKREF 4 ══ -->
+    <section class="step-card" id="step-3" aria-labelledby="h-3">
+      <div class="card-header">
+        <div><p class="card-step-badge">SKREF 04 AF 07</p><h2 class="card-title" id="h-3">Sjónræn skoðun</h2></div>
+        <span class="card-icon" role="img" aria-label="Stækkunargler">🔍</span>
+      </div>
+      <div class="card-body">
+        <div class="info-box" role="note"><p class="box-label">Af hverju?</p><strong>1 mínúta í skoðun = 10 mínútur í bilanaleit</strong></div>
+        <p class="sec-h" id="ins-h">Skoðunargáttarlisti — 10 atriði</p>
+        <ul class="checklist" aria-labelledby="ins-h">
+          <li role="checkbox" aria-checked="false" tabindex="0" data-cid="i-0" onclick="toggleCheck(this)" onkeydown="checkKey(event,this)"><span class="cb-box" aria-hidden="true">✓</span>Allir <strong>12 LED</strong> — rétt stefna</li>
+          <li role="checkbox" aria-checked="false" tabindex="0" data-cid="i-1" onclick="toggleCheck(this)" onkeydown="checkKey(event,this)"><span class="cb-box" aria-hidden="true">✓</span>Allar <strong>4 almenn díóður</strong> — hvítur bendill rétt</li>
+          <li role="checkbox" aria-checked="false" tabindex="0" data-cid="i-2" onclick="toggleCheck(this)" onkeydown="checkKey(event,this)"><span class="cb-box" aria-hidden="true">✓</span>Allar <strong>8 flyback díóður</strong> — rétt stefna</li>
+          <li role="checkbox" aria-checked="false" tabindex="0" data-cid="i-3" onclick="toggleCheck(this)" onkeydown="checkKey(event,this)"><span class="cb-box" aria-hidden="true">✓</span>Allir <strong>4 relay</strong> — beint og djúpt</li>
+          <li role="checkbox" aria-checked="false" tabindex="0" data-cid="i-4" onclick="toggleCheck(this)" onkeydown="checkKey(event,this)"><span class="cb-box" aria-hidden="true">✓</span>Allir <strong>8 rofar</strong> — öruggir og beint</li>
+          <li role="checkbox" aria-checked="false" tabindex="0" data-cid="i-5" onclick="toggleCheck(this)" onkeydown="checkKey(event,this)"><span class="cb-box" aria-hidden="true">✓</span><strong>IDC tengi</strong> — allir 40 pinnar, engar brýr</li>
+          <li role="checkbox" aria-checked="false" tabindex="0" data-cid="i-6" onclick="toggleCheck(this)" onkeydown="checkKey(event,this)"><span class="cb-box" aria-hidden="true">✓</span><strong>MSTB tengi</strong> — J2 og J3 lóðuð</li>
+          <li role="checkbox" aria-checked="false" tabindex="0" data-cid="i-7" onclick="toggleCheck(this)" onkeydown="checkKey(event,this)"><span class="cb-box" aria-hidden="true">✓</span>Engir <strong>laugar legir</strong></li>
+          <li role="checkbox" aria-checked="false" tabindex="0" data-cid="i-8" onclick="toggleCheck(this)" onkeydown="checkKey(event,this)"><span class="cb-box" aria-hidden="true">✓</span>Engar <strong>brýr</strong> á bakhlið</li>
+          <li role="checkbox" aria-checked="false" tabindex="0" data-cid="i-9" onclick="toggleCheck(this)" onkeydown="checkKey(event,this)"><span class="cb-box" aria-hidden="true">✓</span>Engar <strong>kaldlóðningar</strong></li>
+        </ul>
+        <div class="nav-row"><button class="btn btn-ghost" onclick="prev()"><span aria-hidden="true">←</span> Til baka</button><div class="spacer"></div><button class="btn btn-primary" onclick="next()">Prófun <span aria-hidden="true">→</span></button></div>
+      </div>
+    </section>
+
+    <!-- ══ SKREF 5 ══ -->
+    <section class="step-card" id="step-4" aria-labelledby="h-4">
+      <div class="card-header">
+        <div><p class="card-step-badge">SKREF 05 AF 07</p><h2 class="card-title" id="h-4">Prófun í prófara</h2></div>
+        <span class="card-icon" role="img" aria-label="Elding">⚡</span>
+      </div>
+      <div class="card-body">
+        <div class="info-box" role="note"><p class="box-label">Um prófara</p>Kennari/leiðbeinandi hjálpar við tengingu prófarans.</div>
+        <p class="sec-h" id="con-h">Tengja við prófara</p>
+        <ol class="steps-list" aria-labelledby="con-h">
+          <li role="checkbox" aria-checked="false" tabindex="0" data-cid="c-0" onclick="toggleDone(this)" onkeydown="checkKey(event,this)">Athugaðu að ekkert sé tengt við J2</li>
+          <li role="checkbox" aria-checked="false" tabindex="0" data-cid="c-1" onclick="toggleDone(this)" onkeydown="checkKey(event,this)">Tengdu IDC snúru — pin 1 = pin 1</li>
+          <li role="checkbox" aria-checked="false" tabindex="0" data-cid="c-2" onclick="toggleDone(this)" onkeydown="checkKey(event,this)">Tengdu 12V/GND á J3 — rauður = +, svartur = –</li>
+          <li role="checkbox" aria-checked="false" tabindex="0" data-cid="c-3" onclick="toggleDone(this)" onkeydown="checkKey(event,this)">Kveiktu á prófara</li>
+        </ol>
+        <p class="sec-h" id="test-h">Prófunarniðurstöður</p>
+        <div class="test-grid" aria-labelledby="test-h">
+          <button class="test-btn" data-state="" data-tid="t0" onclick="cycleTest(this)" aria-label="LED 1–6 loga: ekki prófað"><span class="test-indicator" aria-hidden="true"></span><span class="test-inner"><span class="test-name">LED 1–6 loga</span><span class="test-status">Ekki prófað</span></span></button>
+          <button class="test-btn" data-state="" data-tid="t1" onclick="cycleTest(this)" aria-label="LED 7–12 loga: ekki prófað"><span class="test-indicator" aria-hidden="true"></span><span class="test-inner"><span class="test-name">LED 7–12 loga</span><span class="test-status">Ekki prófað</span></span></button>
+          <button class="test-btn" data-state="" data-tid="t2" onclick="cycleTest(this)" aria-label="Relay K1: ekki prófað"><span class="test-indicator" aria-hidden="true"></span><span class="test-inner"><span class="test-name">Relay K1 klikkar</span><span class="test-status">Ekki prófað</span></span></button>
+          <button class="test-btn" data-state="" data-tid="t3" onclick="cycleTest(this)" aria-label="Relay K2: ekki prófað"><span class="test-indicator" aria-hidden="true"></span><span class="test-inner"><span class="test-name">Relay K2 klikkar</span><span class="test-status">Ekki prófað</span></span></button>
+          <button class="test-btn" data-state="" data-tid="t4" onclick="cycleTest(this)" aria-label="Relay K3: ekki prófað"><span class="test-indicator" aria-hidden="true"></span><span class="test-inner"><span class="test-name">Relay K3 klikkar</span><span class="test-status">Ekki prófað</span></span></button>
+          <button class="test-btn" data-state="" data-tid="t5" onclick="cycleTest(this)" aria-label="Relay K4: ekki prófað"><span class="test-indicator" aria-hidden="true"></span><span class="test-inner"><span class="test-name">Relay K4 klikkar</span><span class="test-status">Ekki prófað</span></span></button>
+          <button class="test-btn" data-state="" data-tid="t6" onclick="cycleTest(this)" aria-label="Rofar 1–4: ekki prófað"><span class="test-indicator" aria-hidden="true"></span><span class="test-inner"><span class="test-name">Rofar 1–4 virka</span><span class="test-status">Ekki prófað</span></span></button>
+          <button class="test-btn" data-state="" data-tid="t7" onclick="cycleTest(this)" aria-label="Rofar 5–8: ekki prófað"><span class="test-indicator" aria-hidden="true"></span><span class="test-inner"><span class="test-name">Rofar 5–8 virka</span><span class="test-status">Ekki prófað</span></span></button>
+        </div>
+        <div class="info-box danger" role="note"><p class="box-label">Ef eitthvað virkar ekki</p>Slökktu tafarlaust og skoðaðu viðkomandi hluta.</div>
+        <div class="nav-row"><button class="btn btn-ghost" onclick="prev()"><span aria-hidden="true">←</span> Til baka</button><div class="spacer"></div><button class="btn btn-primary" onclick="next()">FabLab <span aria-hidden="true">→</span></button></div>
+      </div>
+    </section>
+
+    <!-- ══ SKREF 6 ══ -->
+    <section class="step-card" id="step-5" aria-labelledby="h-5">
+      <div class="card-header">
+        <div><p class="card-step-badge">SKREF 06 AF 07</p><h2 class="card-title" id="h-5">FabLab — Plata undir borðið</h2></div>
+        <span class="card-icon" role="img" aria-label="Klippur">✂️</span>
+      </div>
+      <div class="card-body">
+        <div class="info-box" role="note"><p class="box-label">FabLab</p>Laser skurður á bakplötu úr MDF eða lakkrúðu.</div>
+        <p class="sec-h" id="fab-h">Verkþættir</p>
+        <ul class="checklist" aria-labelledby="fab-h">
+          <li role="checkbox" aria-checked="false" tabindex="0" data-cid="f-0" onclick="toggleCheck(this)" onkeydown="checkKey(event,this)"><span class="cb-box" aria-hidden="true">✓</span>Opnaðu <strong>Lightburn</strong> eða <strong>Inkscape</strong></li>
+          <li role="checkbox" aria-checked="false" tabindex="0" data-cid="f-1" onclick="toggleCheck(this)" onkeydown="checkKey(event,this)"><span class="cb-box" aria-hidden="true">✓</span>Mældu prentplötuna og stilltu skurðarmynd — <code>3 mm</code> göt í hornum</li>
+          <li role="checkbox" aria-checked="false" tabindex="0" data-cid="f-2" onclick="toggleCheck(this)" onkeydown="checkKey(event,this)"><span class="cb-box" aria-hidden="true">✓</span>Veldu efni — <strong>3 mm MDF</strong> eða acrylic</li>
+          <li role="checkbox" aria-checked="false" tabindex="0" data-cid="f-3" onclick="toggleCheck(this)" onkeydown="checkKey(event,this)"><span class="cb-box" aria-hidden="true">✓</span>Festu efni og keyrðu skurðinn</li>
+          <li role="checkbox" aria-checked="false" tabindex="0" data-cid="f-4" onclick="toggleCheck(this)" onkeydown="checkKey(event,this)"><span class="cb-box" aria-hidden="true">✓</span>Fínpússaðu brúnir</li>
+        </ul>
+        <div class="nav-row"><button class="btn btn-ghost" onclick="prev()"><span aria-hidden="true">←</span> Til baka</button><div class="spacer"></div><button class="btn btn-primary" onclick="next()">3D Fætur <span aria-hidden="true">→</span></button></div>
+      </div>
+    </section>
+
+    <!-- ══ SKREF 7 ══ -->
+    <section class="step-card" id="step-6" aria-labelledby="h-6">
+      <div class="card-header">
+        <div><p class="card-step-badge">SKREF 07 AF 07</p><h2 class="card-title" id="h-6">FabLab — 3D prentaðir fætur</h2></div>
+        <span class="card-icon" role="img" aria-label="Prentari">🖨️</span>
+      </div>
+      <div class="card-body">
+        <div class="info-box" role="note"><p class="box-label">Tilgangurinn</p>3D prentaðir fætur í PLA/PETG — hækkun, loftræsing og hliðrun.</div>
+        <p class="sec-h" id="print-h">Prentunin</p>
+        <ol class="steps-list" aria-labelledby="print-h">
+          <li role="checkbox" aria-checked="false" tabindex="0" data-cid="p-0" onclick="toggleDone(this)" onkeydown="checkKey(event,this)">Opnaðu <strong>PrusaSlicer</strong> eða <strong>Bambu Studio</strong></li>
+          <li role="checkbox" aria-checked="false" tabindex="0" data-cid="p-1" onclick="toggleDone(this)" onkeydown="checkKey(event,this)">Stilltu: <code>0.2mm</code> layer, <code>20%</code> infill, engin stuðningur</li>
+          <li role="checkbox" aria-checked="false" tabindex="0" data-cid="p-2" onclick="toggleDone(this)" onkeydown="checkKey(event,this)">Prenta 4 fætur</li>
+          <li role="checkbox" aria-checked="false" tabindex="0" data-cid="p-3" onclick="toggleDone(this)" onkeydown="checkKey(event,this)">Fjarlægðu brim og settu fæturna á</li>
+        </ol>
+        <div class="info-box ok" role="note"><p class="box-label">✓ Tilbúið!</p>Þegar fæturna eru settir — ert þú tilbúinn að klára!</div>
+        <div class="nav-row"><button class="btn btn-ghost" onclick="prev()"><span aria-hidden="true">←</span> Til baka</button><div class="spacer"></div><button class="btn btn-complete" onclick="complete()">✓ Klára verkefnið!</button></div>
+      </div>
+    </section>
+
+    <!-- ══ LOKASKJÁR ══ -->
+    <section class="step-card" id="step-7" aria-labelledby="h-done" aria-live="polite">
+      <div class="card-body">
+        <div class="complete-wrap">
+          <span class="complete-icon" role="img" aria-label="Fánafleygur">🎉</span>
+          <h2 id="h-done">HermiBorð — LOKIÐ!</h2>
+          <p>Vel gert! Þú hefur smíðað, lóðað, prófað og klárað HermiBorðið þitt.</p>
+          <div class="stats-row">
+            <div class="stat-card"><p class="stat-label">Íhlutir</p><p class="stat-val">49</p><p class="stat-sub">lóðaðir</p></div>
+            <div class="stat-card"><p class="stat-label">Skref</p><p class="stat-val">7</p><p class="stat-sub">kláruð</p></div>
+            <div class="stat-card"><p class="stat-label">Staða</p><p class="stat-val">✓</p><p class="stat-sub">Samþykkt</p></div>
+          </div>
+          <button class="btn btn-ghost" onclick="restart()" style="margin:0 auto">↩ Byrja aftur</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ══════════════════════════════════════════════════
+     JAVASCRIPT — State, Sync, Navigation, 3D viewer
+═══════════════════════════════════════════════════ -->
+<script>
+// ─── USER ID (UUID v4, stored in localStorage) ───────────────
+function getOrCreateUserId() {
+  let id = localStorage.getItem('hermiboro_uid');
+  if (!id) {
+    id = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+      const r = Math.random() * 16 | 0;
+      return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+    localStorage.setItem('hermiboro_uid', id);
+  }
+  return id;
+}
+const USER_ID = getOrCreateUserId();
+
+// ─── STATE ───────────────────────────────────────────────────
+let state = {
+  currentStep: 0,
+  completedSteps: [],
+  checks: {},
+  testResults: {},
+  lodaState: {},
+  compChecks: {}
+};
+
+let syncTimer = null;
+
+// ─── SYNC ─────────────────────────────────────────────────────
+function setSyncStatus(s) {
+  const dot = document.getElementById('syncDot');
+  dot.className = 'sync-dot ' + s;
+}
+
+async function loadProgress() {
+  try {
+    const res = await fetch(`/api/progress/${USER_ID}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    state = { ...state, ...data };
+    applyState();
+    setSyncStatus('saved');
+  } catch (e) {
+    // Offline or first load — use defaults
+    console.log('Nota staðbundinn framgang (offline)');
+  }
+}
+
+async function saveProgress() {
+  setSyncStatus('saving');
+  try {
+    const res = await fetch(`/api/progress/${USER_ID}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(state)
+    });
+    if (res.ok) setSyncStatus('saved');
+    else setSyncStatus('error');
+  } catch (e) {
+    setSyncStatus('error');
+  }
+}
+
+function scheduleSave() {
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(saveProgress, 1200);
+}
+
+// ─── APPLY STATE FROM SERVER ──────────────────────────────────
+function applyState() {
+  // Step
+  renderStep(state.currentStep);
+
+  // Completed nav buttons
+  state.completedSteps.forEach(s => {
+    const btn = document.getElementById('nav-' + s);
+    if (btn) { btn.classList.add('done'); btn.querySelector('.step-num').textContent = '✓'; }
+  });
+
+  // Checkboxes
+  Object.entries(state.checks).forEach(([id, checked]) => {
+    const el = document.querySelector(`[data-cid="${id}"]`);
+    if (el && checked) {
+      el.setAttribute('aria-checked', 'true');
+      const cb = el.querySelector('.cb-box');
+      if (cb) cb.style.background = 'var(--green)';
+    }
+  });
+
+  // Lóðunarröð
+  document.querySelectorAll('.loda-btn').forEach(btn => {
+    const id = btn.getAttribute('data-loda');
+    if (state.lodaState[id]) {
+      btn.setAttribute('aria-pressed', 'true');
+      btn.querySelector('.loda-n').textContent = '✓';
+    }
+  });
+
+  // Test results
+  Object.entries(state.testResults).forEach(([tid, s]) => {
+    const btn = document.querySelector(`[data-tid="${tid}"]`);
+    if (btn && s) applyTestState(btn, s);
+  });
+
+  // Comp checks
+  document.querySelectorAll('.comp-item').forEach(el => {
+    const id = el.getAttribute('data-comp');
+    if (state.compChecks[id]) {
+      el.setAttribute('aria-checked', 'true');
+      el.querySelector('.comp-icon').textContent = '☑';
+    }
+  });
+
+  updateProgress();
+}
+
+// ─── NAVIGATION ───────────────────────────────────────────────
+let currentStep = 0;
+const TOTAL_STEPS = 7;
+
+function renderStep(step) {
+  document.querySelectorAll('.step-card').forEach(c => c.classList.remove('active'));
+  document.getElementById('step-' + step).classList.add('active');
+  document.querySelectorAll('#stepNav button').forEach((btn, i) => {
+    btn.removeAttribute('aria-current');
+    if (i === step) btn.setAttribute('aria-current', 'step');
+  });
+  currentStep = step;
+  const h = document.querySelector(`#step-${step} h2`);
+  if (h) { h.setAttribute('tabindex', '-1'); h.focus(); }
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function goTo(step) {
+  state.currentStep = step;
+  renderStep(step);
+  updateProgress();
+  scheduleSave();
+}
+
+function next() {
+  const btn = document.getElementById('nav-' + currentStep);
+  if (btn && !btn.classList.contains('done')) {
+    btn.classList.add('done');
+    btn.querySelector('.step-num').textContent = '✓';
+    if (!state.completedSteps.includes(currentStep)) state.completedSteps.push(currentStep);
+  }
+  goTo(currentStep + 1);
+}
+
+function prev()    { if (currentStep > 0) goTo(currentStep - 1); }
+
+function complete() {
+  const btn = document.getElementById('nav-' + currentStep);
+  if (btn) { btn.classList.add('done'); btn.querySelector('.step-num').textContent = '✓'; if (!state.completedSteps.includes(currentStep)) state.completedSteps.push(currentStep); }
+  state.currentStep = 7;
+  renderStep(7);
+  updateProgress(100);
+  scheduleSave();
+}
+
+async function restart() {
+  if (!confirm('Hreinsa allan framgang og byrja aftur?')) return;
+  state = { currentStep: 0, completedSteps: [], checks: {}, testResults: {}, lodaState: {}, compChecks: {} };
+  await fetch(`/api/progress/${USER_ID}`, { method: 'DELETE' });
+  location.reload();
+}
+
+// ─── PROGRESS ─────────────────────────────────────────────────
+function updateProgress(forceVal) {
+  const pct = forceVal !== undefined ? forceVal : Math.round((currentStep / TOTAL_STEPS) * 100);
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('pctText').textContent = pct + '%';
+  const bar = document.getElementById('progressBar');
+  bar.setAttribute('aria-valuenow', pct);
+  bar.setAttribute('aria-valuetext', pct + '% lokið');
+}
+
+// ─── INTERACTION HELPERS ──────────────────────────────────────
+function toggleCheck(el) {
+  const checked = el.getAttribute('aria-checked') === 'true';
+  el.setAttribute('aria-checked', String(!checked));
+  const cb = el.querySelector('.cb-box');
+  if (cb) { cb.style.background = !checked ? 'var(--green)' : ''; cb.style.borderColor = !checked ? 'var(--green)' : ''; cb.style.color = !checked ? '#000' : 'transparent'; }
+  const id = el.getAttribute('data-cid');
+  if (id) { state.checks[id] = !checked; scheduleSave(); }
+}
+
+function toggleDone(el) { toggleCheck(el); }
+
+function checkKey(e, el) {
+  if (e.key === ' ' || e.key === 'Enter') { toggleCheck(el); e.preventDefault(); }
+}
+
+function toggleLoda(btn) {
+  const pressed = btn.getAttribute('aria-pressed') === 'true';
+  btn.setAttribute('aria-pressed', String(!pressed));
+  const numEl = btn.querySelector('.loda-n');
+  if (!pressed) { numEl.textContent = '✓'; } else { const idx = Array.from(document.querySelectorAll('.loda-btn')).indexOf(btn); numEl.textContent = idx + 1; }
+  const id = btn.getAttribute('data-loda');
+  if (id !== null) { state.lodaState[id] = !pressed; scheduleSave(); }
+}
+
+function toggleComp(el) {
+  const checked = el.getAttribute('aria-checked') === 'true';
+  el.setAttribute('aria-checked', String(!checked));
+  el.querySelector('.comp-icon').textContent = !checked ? '☑' : '☐';
+  const id = el.getAttribute('data-comp');
+  if (id !== null) { state.compChecks[id] = !checked; scheduleSave(); }
+}
+
+const TEST_STATES = ['', 'pass', 'fail'];
+const TEST_LABELS = { '': 'Ekki prófað', 'pass': '✓ Klár', 'fail': '✗ Brest' };
+const TEST_ICONS  = { '': '', 'pass': '✓', 'fail': '✗' };
+
+function applyTestState(btn, s) {
+  btn.setAttribute('data-state', s);
+  btn.querySelector('.test-indicator').textContent = TEST_ICONS[s];
+  btn.querySelector('.test-status').textContent = TEST_LABELS[s];
+  btn.setAttribute('aria-label', btn.querySelector('.test-name').textContent + ': ' + TEST_LABELS[s]);
+}
+
+function cycleTest(btn) {
+  const curr = btn.getAttribute('data-state') || '';
+  const next = TEST_STATES[(TEST_STATES.indexOf(curr) + 1) % TEST_STATES.length];
+  applyTestState(btn, next);
+  const tid = btn.getAttribute('data-tid');
+  if (tid) { state.testResults[tid] = next; scheduleSave(); }
+}
+
+// ─── 3D VIEWER ────────────────────────────────────────────────
+let renderer, scene, camera, animId;
+let isDragging = false, isRightDrag = false;
+let prevMouse = { x: 0, y: 0 };
+let spherical = { theta: 0.5, phi: 1.1, radius: 22 };
+let target = { x: 0, y: 0, z: 0 };
+
+function buildPCB() {
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x080c10);
+  scene.fog = new THREE.FogExp2(0x080c10, 0.018);
+
+  // Lighting
+  scene.add(new THREE.AmbientLight(0x223344, 0.8));
+  const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+  sun.position.set(10, 18, 10);
+  scene.add(sun);
+  const fill = new THREE.DirectionalLight(0x38d9f5, 0.4);
+  fill.position.set(-8, 5, -5);
+  scene.add(fill);
+
+  // ─ PCB Board ─
+  const pcbGeo = new THREE.BoxGeometry(14, 0.18, 9);
+  const pcbMat = new THREE.MeshPhongMaterial({ color: 0x1a5528, shininess: 60, specular: 0x223322 });
+  const pcb = new THREE.Mesh(pcbGeo, pcbMat);
+  scene.add(pcb);
+
+  // PCB edge highlight
+  const edgeGeo = new THREE.EdgesGeometry(pcbGeo);
+  const edgeMat = new THREE.LineBasicMaterial({ color: 0x2d8a40, linewidth: 1 });
+  pcb.add(new THREE.LineSegments(edgeGeo, edgeMat));
+
+  // ─ Helper ─
+  const Y = 0.09 + 0.001; // just above board surface
+
+  function box(w, h, d, col, px, pz, py) {
+    const m = new THREE.Mesh(
+      new THREE.BoxGeometry(w, h, d),
+      new THREE.MeshPhongMaterial({ color: col, shininess: 40 })
+    );
+    m.position.set(px, Y + h / 2 + (py || 0), pz);
+    scene.add(m);
+    return m;
+  }
+
+  function cyl(r, h, col, px, pz) {
+    const m = new THREE.Mesh(
+      new THREE.CylinderGeometry(r, r, h, 12),
+      new THREE.MeshPhongMaterial({ color: col, shininess: 80, emissive: col, emissiveIntensity: 0.15 })
+    );
+    m.position.set(px, Y + h / 2, pz);
+    scene.add(m);
+  }
+
+  // ─ IDC Connector 40-pin (left side) ─
+  box(1.4, 0.65, 4.5, 0x555566, -5.8, 0);
+  // Pin rows
+  for (let r = 0; r < 2; r++) {
+    for (let i = 0; i < 20; i++) {
+      box(0.08, 0.5, 0.08, 0xccbb88, -5.8 + 0.35 - r * 0.35, -2.1 + i * 0.22);
+    }
+  }
+
+  // ─ MSTB 2×8 connector (right bottom) ─
+  box(4.2, 0.55, 0.9, 0x1a3a80, 2.5, 3.8);
+  for (let i = 0; i < 8; i++) {
+    box(0.35, 0.8, 0.35, 0xaaaaaa, 0.7 + i * 0.55, 3.8);
+  }
+
+  // ─ MSTB 1×2 connector (power, top left) ─
+  box(1.1, 0.55, 0.9, 0x1a3a80, -5.0, -3.7);
+  for (let i = 0; i < 2; i++) {
+    box(0.35, 0.8, 0.35, 0xaaaaaa, -5.28 + i * 0.6, -3.7);
+  }
+
+  // ─ 4 Relays ─
+  for (let i = 0; i < 4; i++) {
+    const rx = -1.5 + i * 2.2;
+    box(1.6, 1.0, 2.0, 0x111111, rx, -1.0);
+    // Relay label stripe
+    box(1.62, 0.15, 0.3, 0x38d9f5, rx, -1.0, 0.94);
+  }
+
+  // ─ 12 LEDs ─ (3 rows of 4)
+  const ledColors = [0xff2222, 0x22cc44, 0xffaa00, 0x2288ff];
+  for (let row = 0; row < 3; row++) {
+    for (let col = 0; col < 4; col++) {
+      const c = ledColors[col];
+      const lm = new THREE.MeshPhongMaterial({ color: c, emissive: c, emissiveIntensity: 0.6, shininess: 100, transparent: true, opacity: 0.9 });
+      const led = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.3, 8), lm);
+      led.position.set(0.5 + col * 1.1, Y + 0.15, 1.2 + row * 1.1);
+      scene.add(led);
+      // Glow ring
+      const glow = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.05, 8), new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.3 }));
+      glow.position.set(0.5 + col * 1.1, Y + 0.01, 1.2 + row * 1.1);
+      scene.add(glow);
+    }
+  }
+
+  // ─ 12 Resistors ─
+  for (let i = 0; i < 12; i++) {
+    const rx = -4.5 + (i % 6) * 0.65;
+    const rz = -2.5 + Math.floor(i / 6) * 0.7;
+    cyl(0.08, 0.4, 0xc8a040, rx, rz);
+    // Color bands
+    box(0.18, 0.42, 0.08, [0xcc4444,0xcc8844,0x4444cc,0x888888][i % 4], rx, rz);
+  }
+
+  // ─ 4 Signal Diodes ─
+  for (let i = 0; i < 4; i++) {
+    cyl(0.07, 0.35, 0x555544, -3.2 + i * 0.45, 0.5);
+  }
+
+  // ─ 8 Flyback Diodes (near relays) ─
+  for (let i = 0; i < 4; i++) {
+    const rx = -1.5 + i * 2.2;
+    cyl(0.07, 0.35, 0x554444, rx - 0.4, -2.3);
+    cyl(0.07, 0.35, 0x554444, rx + 0.4, -2.3);
+  }
+
+  // ─ 8 Switches ─ (2 rows of 4)
+  for (let row = 0; row < 2; row++) {
+    for (let col = 0; col < 4; col++) {
+      box(0.6, 0.5, 0.6, 0x666677, 5.0 + col * 0.8, -1.5 + row * 1.0);
+      // Switch knob
+      box(0.22, 0.25, 0.22, 0x999999, 5.0 + col * 0.8, -1.5 + row * 1.0, 0.4);
+    }
+  }
+
+  // ─ Copper traces (simplified) ─
+  const traceMat = new THREE.MeshBasicMaterial({ color: 0x8b6914, transparent: true, opacity: 0.4 });
+  [[0, -3, 10, 0.06], [3, 2, 6, 0.06], [-2, -1, 8, 0.06]].forEach(([x, z, l, w]) => {
+    const t = new THREE.Mesh(new THREE.BoxGeometry(w, 0.01, l), traceMat);
+    t.position.set(x, 0.10, z);
+    scene.add(t);
+  });
+
+  // ─ Grid reference lines ─
+  const grid = new THREE.GridHelper(30, 30, 0x1a2a1a, 0x1a2a1a);
+  grid.position.y = -0.5;
+  scene.add(grid);
+}
+
+function initViewer() {
+  const canvas = document.getElementById('pcb-canvas');
+  const wrap = canvas.parentElement;
+
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setSize(wrap.clientWidth, wrap.clientHeight);
+
+  camera = new THREE.PerspectiveCamera(45, wrap.clientWidth / wrap.clientHeight, 0.1, 200);
+
+  buildPCB();
+  updateCamera();
+  animate();
+  attachMouseEvents(canvas);
+  attachTouchEvents(canvas);
+  attachKeyEvents(canvas);
+
+  // Resize observer
+  new ResizeObserver(() => {
+    renderer.setSize(wrap.clientWidth, wrap.clientHeight);
+    camera.aspect = wrap.clientWidth / wrap.clientHeight;
+    camera.updateProjectionMatrix();
+  }).observe(wrap);
+}
+
+function updateCamera() {
+  const { theta, phi, radius } = spherical;
+  camera.position.set(
+    target.x + radius * Math.sin(phi) * Math.sin(theta),
+    target.y + radius * Math.cos(phi),
+    target.z + radius * Math.sin(phi) * Math.cos(theta)
+  );
+  camera.lookAt(target.x, target.y, target.z);
+}
+
+function animate() {
+  animId = requestAnimationFrame(animate);
+  renderer.render(scene, camera);
+}
+
+function attachMouseEvents(el) {
+  el.addEventListener('mousedown', e => { isDragging = true; isRightDrag = e.button === 2; prevMouse = { x: e.clientX, y: e.clientY }; });
+  window.addEventListener('mousemove', e => {
+    if (!isDragging) return;
+    const dx = e.clientX - prevMouse.x;
+    const dy = e.clientY - prevMouse.y;
+    prevMouse = { x: e.clientX, y: e.clientY };
+    if (isRightDrag) {
+      target.x -= dx * 0.02;
+      target.z -= dy * 0.02;
+    } else {
+      spherical.theta -= dx * 0.008;
+      spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi + dy * 0.008));
+    }
+    updateCamera();
+  });
+  window.addEventListener('mouseup', () => isDragging = false);
+  el.addEventListener('wheel', e => { spherical.radius = Math.max(5, Math.min(50, spherical.radius + e.deltaY * 0.05)); updateCamera(); e.preventDefault(); }, { passive: false });
+  el.addEventListener('contextmenu', e => e.preventDefault());
+}
+
+function attachTouchEvents(el) {
+  let lastTouches = null;
+  el.addEventListener('touchstart', e => { lastTouches = e.touches; }, { passive: true });
+  el.addEventListener('touchmove', e => {
+    if (e.touches.length === 1 && lastTouches?.length === 1) {
+      const dx = e.touches[0].clientX - lastTouches[0].clientX;
+      const dy = e.touches[0].clientY - lastTouches[0].clientY;
+      spherical.theta -= dx * 0.01;
+      spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi + dy * 0.01));
+    } else if (e.touches.length === 2 && lastTouches?.length === 2) {
+      const d0 = Math.hypot(lastTouches[0].clientX - lastTouches[1].clientX, lastTouches[0].clientY - lastTouches[1].clientY);
+      const d1 = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+      spherical.radius = Math.max(5, Math.min(50, spherical.radius - (d1 - d0) * 0.05));
+    }
+    lastTouches = e.touches;
+    updateCamera();
+    e.preventDefault();
+  }, { passive: false });
+}
+
+function attachKeyEvents(el) {
+  el.addEventListener('keydown', e => {
+    const spd = 0.1;
+    if (e.key === 'ArrowLeft')  spherical.theta -= spd;
+    if (e.key === 'ArrowRight') spherical.theta += spd;
+    if (e.key === 'ArrowUp')    spherical.phi = Math.max(0.1, spherical.phi - spd);
+    if (e.key === 'ArrowDown')  spherical.phi = Math.min(Math.PI - 0.1, spherical.phi + spd);
+    if (e.key === '+' || e.key === '=') spherical.radius = Math.max(5, spherical.radius - 1);
+    if (e.key === '-') spherical.radius = Math.min(50, spherical.radius + 1);
+    if (e.key === 'r' || e.key === 'R') resetCamera();
+    updateCamera();
+    e.preventDefault();
+  });
+}
+
+// Camera presets
+function resetCamera() { spherical = { theta: 0.5, phi: 1.1, radius: 22 }; target = { x: 0, y: 0, z: 0 }; updateCamera(); }
+function viewTop()     { spherical = { theta: 0, phi: 0.15, radius: 22 }; updateCamera(); }
+function viewFront()   { spherical = { theta: 0, phi: Math.PI / 2, radius: 22 }; updateCamera(); }
+function viewSide()    { spherical = { theta: Math.PI / 2, phi: Math.PI / 2, radius: 22 }; updateCamera(); }
+
+// Modal open/close
+function openViewer() {
+  const modal = document.getElementById('viewerModal');
+  modal.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  if (!renderer) {
+    setTimeout(initViewer, 50); // wait for layout
+  } else {
+    cancelAnimationFrame(animId);
+    animate();
+  }
+  // Focus trap
+  setTimeout(() => document.getElementById('pcb-canvas').focus(), 100);
+}
+
+function closeViewer() {
+  document.getElementById('viewerModal').classList.remove('open');
+  document.body.style.overflow = '';
+  if (animId) cancelAnimationFrame(animId);
+}
+
+// Close on overlay click
+document.getElementById('viewerModal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeViewer();
+});
+
+// Close on Escape
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.getElementById('viewerModal').classList.contains('open')) closeViewer();
+});
+
+// ─── INIT ─────────────────────────────────────────────────────
+loadProgress();
+</script>
+</body>
+</html>
