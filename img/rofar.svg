@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="140" viewBox="0 0 200 140">
+  <rect width="200" height="140" fill="#f0eeea" rx="6"/>
+  <rect x="10" y="10" width="180" height="120" fill="#e8e5df" rx="4" stroke="#d6d3cb" stroke-width="1" stroke-dasharray="4,3"/>
+  <text x="100" y="65" text-anchor="middle" fill="#7a7a7a" font-family="sans-serif" font-size="13" font-weight="600">Rofar</text>
+  <text x="100" y="85" text-anchor="middle" fill="#aaa" font-family="sans-serif" font-size="10">Mynd kemur</text>
+</svg>

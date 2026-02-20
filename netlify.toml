@@ -1,0 +1,35 @@
+# Netlify stillingar — HermiBorð
+# Engin build-skref þörf, bara statískar skrár.
+
+[build]
+  publish = "."
+
+# Cache headers for assets
+[[headers]]
+  for = "/img/*"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"
+
+[[headers]]
+  for = "/fablab/*"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"
+
+[[headers]]
+  for = "/lang/*"
+  [headers.values]
+    Cache-Control = "public, max-age=3600"
+
+# Security headers
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "SAMEORIGIN"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+# SPA fallback (ef við bætum við routing seinna)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

@@ -1,102 +1,70 @@
-# HermiBorð — VMA Rafdeild
+# HermiBorð — Smíðaleiðbeiningar
 
-Step-by-step smíðaleiðbeiningar með 3D skoðara og framgangsvistunar.
+> Skref-fyrir-skref leiðbeiningar til að smíða HermiBorð hermibúnaðinn fyrir PLC kennslu.
 
-## Keyra staðbundið
+🌐 **[Sjá síðuna í notkun →](https://hermiboard.netlify.app)**
 
-```bash
-npm install
-npm start
-# Opnaðu http://localhost:3000
+## Um verkefnið
+
+HermiBorðið er hermibúnaður sem tengist PLC í gegnum IDC snúru. Nemendur í Rafdeild VMA lóða alla íhluti sjálfir á prentplötu, prófa borðið í prófara, og klára frágang í FabLab.
+
+Þessi vefsíða leiðbeinir nemendum í gegnum allt ferlið — frá undirbúningi til lokaskrefanna.
+
+### Eiginleikar
+
+- **7 skref** — eitt skref sýnilegt í einu, ekkert scroll
+- **Ljóst / dökkt þema** — vistast á milli heimsókna
+- **Aðgengi** — Atkinson Hyperlegible leturgerð, WCAG AA, lyklaborðsvænt
+- **Stækka/minnka texta** — 14px til 22px
+- **Gáttarlistar og prófunargrid** — nemendur merkja framvindu
+- **Myndir af íhlutum** — 📷 takki opnar mynd í modal
+- **FabLab niðurhal** — SVG/PDF skurðarteikning + STL fótamódel
+- **Fjöltyngd** — Íslenska og enska, auðvelt að bæta við tungumálum
+- **Prentavænt** — öll skref birtast á blaði
+
+## Skráarskipan
+
+```
+index.html          ← Aðalskráin
+i18n.js             ← Tungumálakerfi
+lang/
+  is.json           ← Íslenska
+  en.json           ← Enska
+img/
+  foa-logo.png      ← FÓA merki
+  logo40.png        ← VMA 40 ára merki
+  *.svg             ← Íhlutamyndir (placeholder)
+fablab/
+  undirplata-template.svg   ← Laserskurður (Inkscape/Lightburn)
+  undirplata-template.pdf   ← Forskrift á A4
+  fotur-placeholder.stl     ← 3D fótur (PrusaSlicer/Bambu)
+  README.md
 ```
 
-Þróunarham (sjálfvirk endurræsing):
+## Nýtt tungumál
+
+1. Afritaðu `lang/is.json` sem `lang/XX.json`
+2. Þýddu öll gildi — **breyttu ekki lyklum**
+3. Bættu tungumálinu við `LANGUAGES` listann í `i18n.js`
+
+## Þróun
+
+Engin build-skref — bara statískar HTML/JS/JSON skrár. Opnaðu `index.html` í vafra eða notaðu:
+
 ```bash
-npm run dev
+npx serve .
 ```
+
+## Deploy
+
+Síðan er hýst á [Netlify](https://netlify.com) beint frá GitHub. Push á `main` branch deployar sjálfkrafa.
+
+## Höfundar
+
+Samstarfsverkefni **Friðriks Óla Árnasonar** (kennari, Rafdeild VMA) og **Claude AI** (Anthropic).
+
+Rafdeild VMA — Verkmenntaskólinn á Akureyri, Ísland.
 
 ---
 
-## Setja upp á Render.com
-
-### 1. GitHub repo
-Sett upp á GitHub fyrst:
-```bash
-git init
-git add .
-git commit -m "HermiBorð v1"
-git remote add origin https://github.com/NOTANDANAFN/hermiboro.git
-git push -u origin main
-```
-
-### 2. Render uppsetning
-1. Farðu á [render.com](https://render.com) og skráðu þig inn
-2. **New → Web Service**
-3. Tengdu GitHub repoið
-4. Stilltu:
-   - **Name:** `hermiboro`
-   - **Environment:** `Node`
-   - **Build Command:** `npm install`
-   - **Start Command:** `npm start`
-   - **Plan:** Free (nóg fyrir skólanotkun)
-
-### 3. Gögn á Render
-Framgangsgögn eru vistuð í `progress-data.json` á serverinum.
-
-> ⚠️ **Athugasemd:** Render's Free plan hreinsar skrár við endurræsingu.  
-> Til að geyma gögn varanlega, notaðu **Render Persistent Disk** (frjáls í hobby plan):
-> - Dashboard → þjónustan þín → **Disks** → Add Disk
-> - Mount Path: `/var/data`
-> - Breyttu `DATA_FILE` í `server.js` í: `/var/data/progress-data.json`
-
----
-
-## Uppbygging verkefnis
-
-```
-hermiboro/
-├── server.js          # Express server + API
-├── package.json       # Dependencies
-├── progress-data.json # Gögn (búin til sjálfkrafa)
-└── public/
-    └── index.html     # Allt frontend (HTML + CSS + JS + Three.js)
-```
-
-## API endpoints
-
-| Method | Slóð | Lýsing |
-|--------|------|--------|
-| `GET`  | `/api/progress/:userId` | Sækja framgang |
-| `POST` | `/api/progress/:userId` | Vista framgang |
-| `DELETE` | `/api/progress/:userId` | Hreinsa framgang |
-| `GET`  | `/health` | Health check |
-
-## Síðar — bæta við GLB módeli
-
-Þegar þú færð `.glb` skrána:
-
-1. Settu hana í `public/models/hermiboro.glb`
-2. Í `index.html`, skiptu `buildPCB()` út fyrir:
-
-```javascript
-const loader = new THREE.GLTFLoader();
-loader.load('/models/hermiboro.glb', (gltf) => {
-  scene.add(gltf.scene);
-});
-```
-
-Þú þarft að bæta við GLTFLoader:
-```html
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-```
-
----
-
-## Tæknileg gögn
-
-- **Frontend:** Vanilla HTML/CSS/JS + Three.js r128
-- **Backend:** Node.js + Express
-- **Geymsla:** JSON skrá (eða Render Persistent Disk)
-- **Aðgengi:** WCAG 2.1 AA
-- **3D skoðari:** Snúa (drag), þysja (scroll/pinch), færa (right-drag), lyklaborð (←→↑↓ +-)
+*Þetta verkefni er hluti af [Rökrásir og Iðnsmíði](https://github.com/) opnu námsgagnaverkefni.*
